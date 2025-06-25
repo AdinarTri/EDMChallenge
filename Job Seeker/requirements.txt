@@ -1,0 +1,4 @@
+flask
+pandas
+spacy==3.5.3
+stanza

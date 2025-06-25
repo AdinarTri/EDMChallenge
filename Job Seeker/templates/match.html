@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencarian Lowongan Kerja Cerdas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .result-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto max-w-3xl my-10 px-4">
+        <div class="bg-white shadow-lg rounded-xl p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">Pencarian Lowongan Kerja Cerdas</h1>
+                <p class="text-gray-500 mt-2">Gambarkan pekerjaan impian Anda dalam satu kalimat.</p>
+            </div>
+
+            <form action="/cari" method="POST">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input 
+                        type="text" 
+                        name="query"
+                        id="searchInput" 
+                        class="flex-grow w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                        placeholder="Contoh: Saya mau kerja di Bandung gaji di atas 5 juta"
+                        value="{{ query or '' }}"
+                        required>
+                    <button 
+                        type="submit" 
+                        class="w-full sm:w-auto bg-indigo-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-indigo-700 transition duration-300 shadow-md">
+                        Cari
+                    </button>
+                </div>
+            </form>
+
+            <!-- Bagian untuk Menampilkan Hasil -->
+            <div id="results" class="mt-8 border-t pt-6">
+                
+                <!-- JINJA2 TEMPLATING: Cek apakah ada variabel 'jobs' yang dikirim dari Flask -->
+                {% if jobs is defined %}
+                    
+                    <div class="mb-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                        <h3 class="font-bold text-indigo-800">Kriteria Ditemukan</h3>
+                        <p class="text-sm text-indigo-700">
+                            Lokasi: <span class="font-semibold">{{ entities.location or 'Tidak spesifik' }}</span> | 
+                            Gaji Min.: <span class="font-semibold">Rp {{ "{:,.0f}".format(entities.salary) if entities.salary else 'Tidak spesifik' }}</span> | 
+                            Kata Kunci: <span class="font-semibold">{{ entities.keywords|join(', ') or 'Tidak ada' }}</span>
+                        </p>
+                    </div>
+
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                        Menampilkan {{ jobs|length }} lowongan untuk "{{ query }}"
+                    </h2>
+                    
+                    {% if jobs %}
+                        <div class="space-y-4">
+                        <!-- Loop untuk setiap pekerjaan dalam list 'jobs' -->
+                        {% for job in jobs %}
+                            <div class="result-card bg-white border border-gray-200 rounded-lg p-5">
+                                <h3 class="font-bold text-lg text-indigo-700">{{ job.title }}</h3>
+                                <p class="text-md font-semibold text-gray-700">{{ job.company }}</p>
+                                <p class="text-sm text-gray-500">{{ job.location }}</p>
+                                <p class="text-lg font-bold text-green-600 mt-2">
+                                    {% if job.salary_min and job.salary_max %}
+                                        Rp {{ "{:,.0f}".format(job.salary_min) }} - Rp {{ "{:,.0f}".format(job.salary_max) }}
+                                    {% elif job.salary_min %}
+                                        Dari Rp {{ "{:,.0f}".format(job.salary_min) }}
+                                    {% elif job.salary_max %}
+                                        Hingga Rp {{ "{:,.0f}".format(job.salary_max) }}
+                                    {% else %}
+                                        Gaji tidak tersedia
+                                    {% endif %}
+                                </p>
+                                <p class="text-sm text-gray-600 mt-2">{{ job.description }}</p>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <!-- Tampilkan pesan ini jika tidak ada pekerjaan yang cocok -->
+                        <p class="text-center text-gray-500 py-10">Maaf, tidak ada lowongan yang cocok dengan kriteria Anda.</p>
+                    {% endif %}
+
+                {% else %}
+                    <!-- Tampilan default sebelum ada pencarian -->
+                    <p class="text-center text-gray-500 py-10">Hasil pencarian akan muncul di sini.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
