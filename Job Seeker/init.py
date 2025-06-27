@@ -3,7 +3,8 @@ import pandas as pd
 import os
 
 DB_FILE = "jobs.db"
-CSV_FILE = "lowongan_kerja.csv"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_FILE = os.path.join(BASE_DIR, "lowongan_kerja.csv")
 
 def create_database():
     """
