@@ -1,97 +1,116 @@
-import pandas as pd
-import stanza
+from transformers import pipeline
 import re
-import os
+import sqlite3
+import pandas as pd
 
-class JobMatcher:
-    def __init__(self, dataset_path='lowongan_kerja.csv'):
-        self.df = self._load_dataset(dataset_path)
-        self.nlp = self._load_nlp_model()
+class NERExtractor:
+    def __init__(self, db_path='jobs.db'):
+        """
+        Konstruktor untuk memuat pipeline NER, daftar kota, dan daftar kata kunci.
+        """
+        print("Memuat model NER 'cahya/bert-base-indonesian-NER'...")
+        self.ner_pipeline = pipeline(
+            "ner", 
+            model="cahya/bert-base-indonesian-NER", 
+            aggregation_strategy="simple"
+        )
+        print("Model NER berhasil dimuat.")
+        
+        self.known_cities = self._load_known_cities(db_path)
+        
+        self.common_keywords = [
+            'remote', 'full-time', 'part-time', 'fulltime', 'parttime', 
+            'python', 'java', 'javascript', 'sql', 'go', 'docker', 'kubernetes', 
+            'react', 'vue', 'angular', 'seo', 'marketing', 'sales', 'penjualan', 
+            'pemasaran', 'data', 'analis', 'analyst', 'designer', 'desainer', 
+            'engineer', 'developer', 'akuntan', 'administrasi'
+        ]
+        
+        # PERBAIKAN 4: Menambahkan pemetaan untuk area lokasi
+        self.area_mapping = {
+            'Pedesaan': ['jauh dari kota', 'pedesaan', 'asri', 'tenang', 'desa'],
+            'Pusat Kota': ['pusat kota', 'ramai', 'sibuk', 'kota besar'],
+            'Kawasan Industri': ['pabrik', 'industri']
+        }
 
-    def _load_dataset(self, path):
-        if not os.path.exists(path):
-            print(f"Error: File dataset tidak ditemukan di '{path}'")
-            return pd.DataFrame()
-        print(f"Memuat dataset dari '{path}'...")
-        return pd.read_csv(path)
+    def _load_known_cities(self, db_path):
+        """Memuat semua nama kota unik dari database."""
+        try:
+            conn = sqlite3.connect(db_path)
+            df = pd.read_sql_query("SELECT DISTINCT location_city FROM jobs", conn)
+            conn.close()
+            cities = [city.lower() for city in df['location_city'].tolist()]
+            print(f"Berhasil memuat {len(cities)} kota dari database.")
+            return cities
+        except Exception as e:
+            print(f"Gagal memuat daftar kota dari database: {e}")
+            return []
 
-    def _load_nlp_model(self):
-        print("Memuat model NLP Stanza Bahasa Indonesia (tanpa NER)...")
-        stanza.download('id')  # download jika belum ada
-        return stanza.Pipeline('id', processors='tokenize,mwt,pos,lemma')
-
-    def _extract_entities(self, query):
+    def extract(self, query):
+        """
+        Mengekstrak lokasi, gaji, dan kata kunci dari query.
+        """
+        query_lower = query.lower().strip()
         entities = {
             'location': None,
             'salary_min': None,
             'salary_max': None,
-            'keywords': []
+            'keywords': [],
+            'location_area': None # Menambahkan entitas baru
         }
 
-        query = query.lower()
-
-        # Deteksi dua angka gaji dalam kalimat
-        salary_range_matches = re.findall(r'(\d[\d.,]*)\s*(jt|juta)?', query)
+        # --- Ekstraksi Gaji ---
         salaries = []
-        for match in salary_range_matches:
-            val = int(match[0].replace('.', '').replace(',', ''))
-            if match[1] in ['jt', 'juta'] and val < 1000:
-                val *= 1_000_000
-            salaries.append(val)
-
-        if len(salaries) == 2:
-            entities['salary_min'], entities['salary_max'] = min(salaries), max(salaries)
+        salary_matches = re.findall(r'(\d[\d.,]*)', query_lower)
+        is_million = 'juta' in query_lower or 'jt' in query_lower
+        for match in salary_matches:
+            try:
+                val = int(match.replace('.', '').replace(',', ''))
+                if is_million and val < 1000:
+                    val *= 1_000_000
+                salaries.append(val)
+            except ValueError:
+                continue
+        salaries.sort()
+        if len(salaries) >= 2:
+            entities['salary_min'], entities['salary_max'] = salaries[0], salaries[1]
         elif len(salaries) == 1:
-            entities['salary_min'] = entities['salary_max'] = salaries[0]
+            entities['salary_min'] = salaries[0]
 
-        # NLP processing
-        doc = self.nlp(query)
+        # --- Ekstraksi Entitas dengan Model BERT & Fallback ---
+        ner_results = self.ner_pipeline(query)
+        locations = []
+        bert_keywords = []
+        for ent in ner_results:
+            if ent['entity_group'] == 'LOC':
+                locations.append(ent['word'])
+            elif ent['entity_group'] in ['ORG', 'PER', 'MISC']:
+                bert_keywords.append(ent['word'])
 
-        nouns = []
-        propns = []
+        if locations:
+            entities['location'] = locations[0].title()
+        elif self.known_cities: # Fallback Lokasi
+            for city in self.known_cities:
+                if city in query_lower:
+                    entities['location'] = city.title()
+                    break
 
-        for sentence in doc.sentences:
-            for word in sentence.words:
-                if word.upos in ['NOUN', 'PROPN', 'ADJ'] and not word.text.isdigit():
-                    if word.text not in entities['keywords']:
-                        entities['keywords'].append(word.text)
-                    if word.upos == 'PROPN':
-                        propns.append(word.text)
+        # --- PERBAIKAN 4: Ekstraksi Konteks Area Lokasi ---
+        for area, context_words in self.area_mapping.items():
+            for word in context_words:
+                if word in query_lower:
+                    print(f"Fallback: Mengenali '{word}' sebagai preferensi area '{area}'.")
+                    entities['location_area'] = area
+                    break
+            if entities['location_area']:
+                break
 
-        # Lokasi diambil dari proper noun
-        if propns:
-            entities['location'] = propns[0]
+        # --- Logika Ekstraksi Kata Kunci Gabungan ---
+        all_keywords = bert_keywords
+        for keyword in self.common_keywords:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', query_lower):
+                all_keywords.append(keyword)
+
+        entities['keywords'] = list(set(all_keywords))
 
         return entities
-
-    def find_jobs(self, query):
-        if self.df.empty:
-            return [], {}
-
-        entities = self._extract_entities(query)
-        results = self.df.copy()
-
-        # Filter berdasarkan lokasi (jika ada)
-        if entities['location']:
-            results = results[
-                results['location_city'].str.lower() == entities['location'].lower()
-            ]
-
-        # Filter berdasarkan rentang gaji (jika ada)
-        if entities['salary_min'] is not None and entities['salary_max'] is not None:
-            results = results[
-                (results['salary_max'] >= entities['salary_min']) &
-                (results['salary_min'] <= entities['salary_max'])
-            ]
-
-        # Filter berdasarkan kata kunci (jika ada)
-        if entities['keywords']:
-            keyword_query = ' | '.join(entities['keywords'])
-            results = results[
-                results['title'].str.contains(keyword_query, case=False, regex=True) |
-                results['description'].str.contains(keyword_query, case=False, regex=True) |
-                results['skills'].str.contains(keyword_query, case=False, regex=True)
-            ]
-
-        jobs_list = results.to_dict('records')
-        return jobs_list, entities

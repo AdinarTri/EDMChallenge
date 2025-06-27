@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pencarian Lowongan Kerja Cerdas</title>
+    <!-- Memuat library styling Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat font Inter dari Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Mengatur font default untuk seluruh halaman */
         body {
             font-family: 'Inter', sans-serif;
         }
+        /* Efek transisi saat mouse diarahkan ke kartu hasil */
         .result-card {
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
@@ -28,6 +32,8 @@
                 <p class="text-gray-500 mt-2">Gambarkan pekerjaan impian Anda dalam satu kalimat.</p>
             </div>
 
+            <!-- Formulir Pencarian -->
+            <!-- action="/cari" akan mengirim data ke route /cari di Flask saat di-submit -->
             <form action="/cari" method="POST">
                 <div class="flex flex-col sm:flex-row gap-3">
                     <input 
@@ -46,17 +52,19 @@
                 </div>
             </form>
 
-            <!-- Bagian untuk Menampilkan Hasil -->
+            <!-- Bagian untuk Menampilkan Hasil Pencarian -->
             <div id="results" class="mt-8 border-t pt-6">
                 
-                <!-- JINJA2 TEMPLATING: Cek apakah ada variabel 'jobs' yang dikirim dari Flask -->
+                <!-- Ini adalah blok logika Jinja2 -->
+                <!-- Blok ini hanya akan ditampilkan jika variabel 'jobs' dikirim dari Flask -->
                 {% if jobs is defined %}
                     
+                    <!-- Menampilkan ringkasan kriteria yang diekstrak oleh model -->
                     <div class="mb-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
                         <h3 class="font-bold text-indigo-800">Kriteria Ditemukan</h3>
                         <p class="text-sm text-indigo-700">
                             Lokasi: <span class="font-semibold">{{ entities.location or 'Tidak spesifik' }}</span> | 
-                            Gaji Min.: <span class="font-semibold">Rp {{ "{:,.0f}".format(entities.salary) if entities.salary else 'Tidak spesifik' }}</span> | 
+                            Gaji Min.: <span class="font-semibold">Rp {{ "{:,.0f}".format(entities.salary_min) if entities.salary_min else 'Tidak spesifik' }}</span> | 
                             Kata Kunci: <span class="font-semibold">{{ entities.keywords|join(', ') or 'Tidak ada' }}</span>
                         </p>
                     </div>
@@ -65,26 +73,36 @@
                         Menampilkan {{ jobs|length }} lowongan untuk "{{ query }}"
                     </h2>
                     
+                    <!-- Jika ada pekerjaan yang cocok, tampilkan satu per satu -->
                     {% if jobs %}
                         <div class="space-y-4">
-                        <!-- Loop untuk setiap pekerjaan dalam list 'jobs' -->
+                        <!-- Looping untuk setiap 'job' dalam list 'jobs' -->
                         {% for job in jobs %}
                             <div class="result-card bg-white border border-gray-200 rounded-lg p-5">
                                 <h3 class="font-bold text-lg text-indigo-700">{{ job.title }}</h3>
-                                <p class="text-md font-semibold text-gray-700">{{ job.company }}</p>
-                                <p class="text-sm text-gray-500">{{ job.location }}</p>
+                                <p class="text-md font-semibold text-gray-700">{{ job.company_name }}</p>
+                                <p class="text-sm text-gray-500">{{ job.location_city }} ({{ job.location_area }})</p>
+                                
                                 <p class="text-lg font-bold text-green-600 mt-2">
                                     {% if job.salary_min and job.salary_max %}
                                         Rp {{ "{:,.0f}".format(job.salary_min) }} - Rp {{ "{:,.0f}".format(job.salary_max) }}
                                     {% elif job.salary_min %}
                                         Dari Rp {{ "{:,.0f}".format(job.salary_min) }}
-                                    {% elif job.salary_max %}
-                                        Hingga Rp {{ "{:,.0f}".format(job.salary_max) }}
                                     {% else %}
-                                        Gaji tidak tersedia
+                                        Gaji tidak didiskusikan
                                     {% endif %}
                                 </p>
+
                                 <p class="text-sm text-gray-600 mt-2">{{ job.description }}</p>
+
+                                <div class="mt-4 flex flex-wrap items-center gap-2">
+                                    <span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">{{ job.job_type }}</span>
+                                    {% if job.skills %}
+                                        {% for skill in job.skills.split(';') %}
+                                            <span class="inline-block bg-gray-200 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">{{ skill.strip() }}</span>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
                             </div>
                         {% endfor %}
                         </div>
