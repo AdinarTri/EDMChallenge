@@ -2,7 +2,6 @@ from transformers import pipeline
 import re
 import sqlite3
 import pandas as pd
-# PERBAIKAN: Mengimpor library baru
 from sentence_transformers import SentenceTransformer, util
 import torch
 
