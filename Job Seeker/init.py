@@ -13,20 +13,16 @@ def create_database():
     if not os.path.exists(CSV_FILE):
         print(f"Error: File '{CSV_FILE}' tidak ditemukan. Unduh atau buat file tersebut terlebih dahulu.")
         return
-
-    # Hapus file database lama jika ada, untuk memulai dari awal
     if os.path.exists(DB_FILE):
         os.remove(DB_FILE)
         print(f"Database lama '{DB_FILE}' dihapus.")
 
-    # Load data dari CSV
+
     df = pd.read_csv(CSV_FILE)
     print(f"Membaca {len(df)} baris dari '{CSV_FILE}'.")
 
-    # Hubungkan ke SQLite
     conn = sqlite3.connect(DB_FILE)
     
-    # Masukkan data dari DataFrame ke tabel 'jobs' di SQLite
     df.to_sql('jobs', conn, if_exists='replace', index=False)
     
     conn.commit()

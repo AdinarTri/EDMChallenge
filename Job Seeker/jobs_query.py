@@ -13,7 +13,6 @@ def query_jobs(db_path, entities):
         query += " AND LOWER(location_city) = ?"
         params.append(entities['location'].lower())
 
-    # PERBAIKAN: Menambahkan filter untuk location_area
     if entities.get('location_area'):
         query += " AND LOWER(location_area) = ?"
         params.append(entities['location_area'].lower())
@@ -30,8 +29,8 @@ def query_jobs(db_path, entities):
         keyword_clauses = []
         for kw in entities['keywords']:
             like_kw = f"%{kw}%"
-            keyword_clauses.append("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(skills) LIKE ?)")
-            params.extend([like_kw, like_kw, like_kw])
+            keyword_clauses.append("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(skills) LIKE ? OR LOWER(job_type) LIKE ? OR LOWER(company_name) LIKE ?)")
+            params.extend([like_kw, like_kw, like_kw, like_kw, like_kw])
         
         query += f" AND ({' OR '.join(keyword_clauses)})"
     
